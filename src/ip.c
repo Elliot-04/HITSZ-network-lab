@@ -43,7 +43,7 @@ void ip_in(buf_t *buf, uint8_t *src_mac) {
     uint8_t protocol = ip_hdr->protocol;
 
     // 遇到不能识别的协议类型，返回ICMP不可达报文
-    if (protocol != NET_PROTOCOL_ICMP && protocol != NET_PROTOCOL_UDP && protocol != NET_PROTOCOL_IP) {
+    if (protocol != NET_PROTOCOL_ICMP && protocol != NET_PROTOCOL_UDP && protocol != NET_PROTOCOL_IP && protocol != NET_PROTOCOL_TCP) {
         icmp_unreachable(buf, src_ip, ICMP_CODE_PROTOCOL_UNREACH);
         return;
     }
