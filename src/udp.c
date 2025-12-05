@@ -16,7 +16,33 @@ map_t udp_table;
  * @param src_ip 源ip地址
  */
 void udp_in(buf_t *buf, uint8_t *src_ip) {
-    // TO-DO
+    if (buf->len < sizeof(udp_hdr_t))  return;
+    udp_hdr_t *udp_hdr = (udp_hdr_t *)buf->data;
+
+    if (buf->len < swap16(udp_hdr->total_len16)) return;
+
+    // 如果接收到的 checksum 为 0，表示发送方未启用校验和，直接跳过检查
+    if (udp_hdr->checksum16 != 0) {
+        uint16_t checksum16 = udp_hdr->checksum16;
+        udp_hdr->checksum16 = 0;
+        uint16_t calculated_checksum = transport_checksum(NET_PROTOCOL_UDP, buf, src_ip, net_if_ip);
+        if (calculated_checksum == 0) calculated_checksum = 0xFFFF; // 校验和计算结果为0时应改为0xFFFF
+        if (checksum16 != calculated_checksum) return;
+        udp_hdr->checksum16 = checksum16;
+    }
+
+    // 查询回调函数
+    uint16_t dst_port16 = swap16(udp_hdr->dst_port16);
+    udp_handler_t *handler = map_get(&udp_table, &dst_port16);
+
+    if(handler == NULL) {
+        buf_add_header(buf, sizeof(ip_hdr_t));
+        icmp_unreachable(buf, src_ip, ICMP_CODE_PORT_UNREACH);
+        return;
+    }
+    
+    buf_remove_header(buf, sizeof(udp_hdr_t));
+    (*handler)(buf->data, buf->len, src_ip, swap16(udp_hdr->src_port16));
 }
 
 /**
@@ -28,7 +54,23 @@ void udp_in(buf_t *buf, uint8_t *src_ip) {
  * @param dst_port 目的端口号
  */
 void udp_out(buf_t *buf, uint16_t src_port, uint8_t *dst_ip, uint16_t dst_port) {
-    // TO-DO
+    buf_add_header(buf, sizeof(udp_hdr_t));
+    udp_hdr_t *udp_hdr = (udp_hdr_t *)buf->data;
+
+    // 构造UDP头部
+    udp_hdr->src_port16 = swap16(src_port);
+    udp_hdr->dst_port16 = swap16(dst_port);
+    udp_hdr->total_len16 = swap16(buf->len);
+    udp_hdr->checksum16 = 0;
+
+    // 计算UDP校验和
+    uint16_t checksum = transport_checksum(NET_PROTOCOL_UDP, buf, net_if_ip, dst_ip);
+
+    // 如果计算出的校验和是 0x0000，必须发送 0xFFFF。因为 0x0000 在 UDP 中表示“没有校验和”
+    udp_hdr->checksum16 = (checksum == 0) ? 0xFFFF : checksum;
+
+    // 发送UDP数据报
+    ip_out(buf, dst_ip, NET_PROTOCOL_UDP);
 }
 
 /**

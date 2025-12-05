@@ -10,6 +10,14 @@ typedef struct udp_hdr {
     uint16_t total_len16;  // 整个数据包的长度
     uint16_t checksum16;   // 校验和
 } udp_hdr_t;
+
+typedef struct udp_peso_hdr {
+    uint8_t src_ip[4];    // 源IP地址
+    uint8_t dst_ip[4];    // 目的IP地址
+    uint8_t placeholder;  // 必须置0,用于填充对齐
+    uint8_t protocol;     // 协议号
+    uint16_t total_len16; // 整个数据包的长度
+} udp_peso_hdr_t;
 #pragma pack()
 
 typedef void (*udp_handler_t)(uint8_t *data, size_t len, uint8_t *src_ip, uint16_t src_port);

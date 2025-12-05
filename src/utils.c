@@ -1,7 +1,7 @@
 #include "utils.h"
-
+#include "ip.h"
 #include "net.h"
-
+#include "udp.h"
 #include <stdio.h>
 #include <string.h>
 /**
@@ -110,5 +110,37 @@ typedef struct peso_hdr {
  * @return uint16_t 计算得到的16位校验和
  */
 uint16_t transport_checksum(uint8_t protocol, buf_t *buf, uint8_t *src_ip, uint8_t *dst_ip) {
-    // TO-DO
+    buf_add_header(buf, sizeof(ip_hdr_t));
+
+    // 暂存IP首部
+    ip_hdr_t ip_hdr;
+    memcpy(&ip_hdr, buf->data, sizeof(ip_hdr_t));
+    buf_remove_header(buf, sizeof(ip_hdr_t) - sizeof(udp_peso_hdr_t));
+
+    // 填充伪首部
+    udp_peso_hdr_t udp_peso_hdr;
+    memcpy(udp_peso_hdr.src_ip, src_ip, NET_IP_LEN);
+    memcpy(udp_peso_hdr.dst_ip, dst_ip, NET_IP_LEN);
+    udp_peso_hdr.placeholder = 0;
+    udp_peso_hdr.protocol = protocol;
+    udp_peso_hdr.total_len16 = swap16(buf->len - sizeof(udp_peso_hdr_t));
+    memcpy(buf->data, &udp_peso_hdr, sizeof(udp_peso_hdr_t));
+
+    int paddled = 0;
+    if(buf->len % 2) {
+        buf_add_padding(buf, 1);
+        paddled = 1;
+    }
+
+    // 计算校验和
+    uint16_t checksum = checksum16((uint16_t *)buf->data, buf->len);
+
+    // 恢复IP数据
+    buf_add_header(buf, sizeof(ip_hdr_t) - sizeof(udp_peso_hdr_t));
+    memcpy(buf->data, &ip_hdr, sizeof(ip_hdr_t));
+    buf_remove_header(buf, sizeof(ip_hdr_t));
+    
+    if(paddled) buf_remove_padding(buf, 1);
+
+    return checksum;
 }
